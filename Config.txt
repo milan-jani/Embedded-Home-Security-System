@@ -1,0 +1,207 @@
+🔹 1. Power & Clock
+| Component        | MSP430 Pin | Notes              |
+| ---------------- | ---------- | ------------------ |
+| MCU VCC          | 3.3 V      | MSP430 core supply |
+| GND              | GND        | Common ground      |
+| External modules | 5 V        | Servo, MQ sensor, LCD |
+| SMCLK            | 1 MHz      | Default DCO (UART, Timers, I2C) |
+| ACLK             | 32 kHz     | Timer A0 source    |
+
+
+🔹 2. Buzzer (Alert Output)
+| Feature | MSP430 Pin | Direction | Logic     |
+| ------- | ---------- | --------- | --------- |
+| Buzzer  | **P1.6**   | Output    | HIGH = ON |
+
+
+Usage:
+- IR intrusion
+- Gas alert
+- SOS button
+- UART password feedback
+
+🔹 3. LED Indicators
+| Feature   | MSP430 Pin | Direction | Logic        |
+| --------- | ---------- | --------- | ------------ |
+| Green LED | **P1.0**   | Output    | HIGH = ON    |
+| Red LED   | **P4.7**   | Output    | HIGH = ON    |
+
+Details:
+- Green LED: Door unlock success indicator (blinks 2 sec)
+- Red LED: Available for future use
+
+🔹 4. IR Intrusion Sensor
+| Feature | MSP430 Pin | Direction | Type                |
+| ------- | ---------- | --------- | ------------------- |
+| IR OUT  | **P1.3**   | Input     | Digital + Interrupt |
+
+Details:
+- Interrupt: PORT1_VECTOR
+- Trigger: High → Low
+- Function: Motion / intrusion detection
+
+🔹 5. SOS Push Button (S1 on LaunchPad)
+| Feature   | MSP430 Pin | Direction | Type                |
+| --------- | ---------- | --------- | ------------------- |
+| S1 Button | **P2.1**   | Input     | Digital + Interrupt |
+
+
+Details:
+- Interrupt: PORT2_VECTOR
+- Active LOW
+- Emergency trigger (1 sec buzzer)
+
+🔹 6. Flame Sensor (Fire Detection)
+| Feature    | MSP430 Pin | Direction | Type                |
+| ---------- | ---------- | --------- | ------------------- |
+| Flame OUT  | **P2.7**   | Input     | Digital + Interrupt |
+
+
+Details:
+- Interrupt: PORT2_VECTOR
+- Trigger: High → Low (flame detected)
+- Highest priority: Opens door automatically
+- Sets fire_override_active flag
+
+🔹 7. MQ-6 Gas Sensor (Analog)
+| Feature            | MSP430 Pin    | Direction | Type          |
+| ------------------ | ------------- | --------- | ------------- |
+| MQ Analog OUT (AO) | **P6.0 (A0)** | Input     | ADC (12-bit)  |
+| MQ VCC             | 5 V           | Power     | Heater supply |
+| MQ GND             | GND           | Power     | Common ground |
+
+
+Details:
+- Sampling via ADC12
+- Periodic check via Timer A0
+- Threshold: 1800 (adjustable)
+- Displays value on LCD Line 1
+
+🔹 8. Timer (Gas Sensor Polling)
+| Feature  | Module | Purpose                 |
+| -------- | ------ | ----------------------- |
+| Timer A0 | TA0    | Periodic MQ ADC trigger |
+
+
+Details:
+- Source: ACLK (32 kHz)
+- Interval: ~0.5 sec (16384 counts)
+- ISR: TIMER0_A0_VECTOR
+- Sets gas_check_flag
+
+🔹 9. Servo Motor (Door Lock - SG90)
+| Feature       | MSP430 Pin | Direction | Type      |
+| ------------- | ---------- | --------- | --------- |
+| Servo Signal  | **P2.0**   | Output    | PWM (TA1.1) |
+| Servo VCC     | 5 V        | Power     | External recommended |
+| Servo GND     | GND        | Power     | Common ground |
+
+
+Details:
+- Timer: A1 (TA1)
+- PWM Frequency: 50 Hz (20ms period)
+- Open (90°): 1500-2000 µs pulse
+- Close (0°): 1000 µs pulse
+- Module: TA1.1 on P2.0
+- IMPORTANT: Needs external 5V power (500mA+)
+
+🔹 10. LCD Display (16×2 I2C)
+| Feature | MSP430 Pin | Direction     | Protocol      |
+| ------- | ---------- | ------------- | ------------- |
+| LCD SDA | **P3.0**   | Bidirectional | I2C           |
+| LCD SCL | **P3.1**   | Output        | I2C           |
+| LCD VCC | 5 V        | Power         | With backpack |
+| LCD GND | GND        | Power         | Common        |
+
+
+Details:
+- I2C module: UCB0
+- Address: 0x27 (or 0x3F)
+- Clock: SMCLK @ 100kHz
+- Displays:
+  - Line 1: Gas sensor value
+  - Line 2: Password entry / status
+
+🔹 11. UART Communication (Password Entry)
+| Feature  | MSP430 Pin | Direction | Protocol |
+| -------- | ---------- | --------- | -------- |
+| UART TX  | **P4.4**   | Output    | UART     |
+| UART RX  | **P4.5**   | Input     | UART     |
+
+
+Details:
+- Module: USCI_A1
+- Baud Rate: 9600 bps
+- Clock: SMCLK (1 MHz) with 16x oversampling
+- ISR: USCI_A1_VECTOR
+- Password: "1234" (4 digits)
+- Validates only '0'-'9' characters
+- On correct password: Unlocks door + Green LED blink
+
+🔹 12. Communication Summary
+| Interface  | Used For                     | Module   |
+| ---------- | ---------------------------- | -------- |
+| GPIO       | Buzzer, IR, Button, Flame, LED | P1, P2, P4 |
+| ADC        | MQ-6 Gas sensor              | ADC12    |
+| Timer A0   | Periodic ADC polling         | TA0      |
+| Timer A1   | Servo PWM (50Hz)             | TA1      |
+| I2C        | LCD display                  | UCB0     |
+| UART       | Password input               | UCA1     |
+| Interrupts | IR, SOS, Flame, Timer, UART  | Multiple |
+
+
+🔹 13. Priority System
+| Priority | Event              | Action                    |
+| -------- | ------------------ | ------------------------- |
+| 1        | Fire Detection     | Override all, open door   |
+| 2        | SOS Button         | 1 sec buzzer              |
+| 3        | UART Password      | Unlock/lock door          |
+| 4        | Gas Alert          | Continuous buzzer         |
+| 5        | IR Intrusion       | Beep alert                |
+
+
+🔹 14. Pin Summary Table
+| Pin   | Function       | Type           | Notes                    |
+| ----- | -------------- | -------------- | ------------------------ |
+| P1.0  | Green LED      | Output         | Door unlock indicator    |
+| P1.3  | IR Sensor      | Input + Int    | Motion detection         |
+| P1.6  | Buzzer         | Output         | Alert sound              |
+| P2.0  | Servo PWM      | Output (TA1.1) | Door lock control        |
+| P2.1  | SOS Button     | Input + Int    | Emergency button         |
+| P2.7  | Flame Sensor   | Input + Int    | Fire detection           |
+| P3.0  | I2C SDA        | Bidirectional  | LCD data                 |
+| P3.1  | I2C SCL        | Output         | LCD clock                |
+| P4.4  | UART TX        | Output         | Serial transmit          |
+| P4.5  | UART RX        | Input + Int    | Serial receive           |
+| P4.7  | Red LED        | Output         | (Available)              |
+| P6.0  | ADC A0         | Analog Input   | Gas sensor               |
+
+
+🔹 15. Software Architecture
+```
+main_new.c  ← Main loop & initialization
+├── lcd.c       → LCD display functions
+├── uart.c      → Password handling
+├── servo.c     → Door lock control
+└── sensors.c   → All sensors (IR, Gas, Flame, Button)
+```
+
+🔹 16. Code Files Structure
+| File         | Purpose                              |
+| ------------ | ------------------------------------ |
+| main_new.c   | Main program loop & init             |
+| lcd.c        | I2C LCD functions                    |
+| uart.c       | UART + password logic                |
+| servo.c      | PWM servo control                    |
+| sensors.c    | GPIO sensors + ADC + interrupts      |
+| Config.txt   | This pin configuration document      |
+
+
+🔹 17. Testing Files (Optional)
+| File                 | Purpose                     |
+| -------------------- | --------------------------- |
+| test_servo_simple.c  | Standalone servo test       |
+| test_lcd_digits.c    | LCD digit display test      |
+
+
+

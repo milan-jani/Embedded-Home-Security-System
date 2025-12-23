@@ -1,0 +1,19 @@
+# CCS build folders
+Debug/
+Release/
+Generated Binaries/
+Compiler Includes/
+
+# Eclipse / CCS settings
+.settings/
+
+# Build output files
+*.out
+*.map
+*.hex
+*.obj
+*.d
+ *.cmd
+# OS junk
+.DS_Store
+Thumbs.db
